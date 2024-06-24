@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-2.0
 uname_M := $(shell uname -m 2>/dev/null || echo not)
-ARCH ?= $(shell echo $(uname_M) | sed -e s/i.86/x86/ -e s/x86_64/x86/)
+ARCH ?= $(shell echo $(uname_M) | sed -e s/i.86/x86/ -e s/x86_64/x86/ -e s/aarch64.*/arm64/)
 SODIUM := $(shell pkg-config --libs libsodium 2>/dev/null)
 
 TEST_GEN_PROGS := vdso_test_gettimeofday
@@ -11,7 +11,7 @@ ifeq ($(ARCH),$(filter $(ARCH),x86 x86_64))
 TEST_GEN_PROGS += vdso_standalone_test_x86
 endif
 TEST_GEN_PROGS += vdso_test_correctness
-ifeq ($(uname_M),x86_64)
+ifeq ($(uname_M), $(filter x86_64 aarch64, $(uname_M)))
 TEST_GEN_PROGS += vdso_test_getrandom
 ifneq ($(SODIUM),)
 TEST_GEN_PROGS += vdso_test_chacha
@@ -40,8 +40,13 @@ $(OUTPUT)/vdso_test_getrandom: parse_vdso.c
 $(OUTPUT)/vdso_test_getrandom: CFLAGS += -isystem $(top_srcdir)/tools/include \
                                          -isystem $(top_srcdir)/include/uapi
 
+ifeq ($(uname_M),x86_64)
 $(OUTPUT)/vdso_test_chacha: $(top_srcdir)/arch/$(ARCH)/entry/vdso/vgetrandom-chacha.S
+else ifeq ($(uname_M),aarch64)
+$(OUTPUT)/vdso_test_chacha: $(top_srcdir)/arch/$(ARCH)/kernel/vdso/vgetrandom-chacha.S
+endif
 $(OUTPUT)/vdso_test_chacha: CFLAGS += -idirafter $(top_srcdir)/tools/include \
+                                      -isystem $(top_srcdir)/arch/$(ARCH)/include/generated \
                                       -isystem $(top_srcdir)/arch/$(ARCH)/include \
                                       -isystem $(top_srcdir)/include \
                                       -D__ASSEMBLY__ -DBULID_VDSO -DCONFIG_FUNCTION_ALIGNMENT=0 \

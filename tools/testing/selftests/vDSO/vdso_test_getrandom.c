@@ -22,6 +22,14 @@
 #include "../kselftest.h"
 #include "parse_vdso.h"
 
+#ifdef __x86_64__
+#define VDSO_VERSION  "LINUX_2.6"
+#define VDSO_NAME    "__vdso_getrandom"
+#elif __aarch64__
+#define VDSO_VERSION "LINUX_2.6.39"
+#define VDSO_NAME    "__kernel_getrandom"
+#endif
+
 #ifndef timespecsub
 #define	timespecsub(tsp, usp, vsp)					\
 	do {								\
@@ -115,7 +123,7 @@ static void vgetrandom_init(void)
 		exit(KSFT_SKIP);
 	}
 	vdso_init_from_sysinfo_ehdr(sysinfo_ehdr);
-	grnd_ctx.fn = (__typeof__(grnd_ctx.fn))vdso_sym("LINUX_2.6", "__vdso_getrandom");
+	grnd_ctx.fn = (__typeof__(grnd_ctx.fn))vdso_sym(VDSO_VERSION, VDSO_NAME);
 	if (!grnd_ctx.fn) {
 		printf("__vdso_getrandom is missing!\n");
 		exit(KSFT_FAIL);
