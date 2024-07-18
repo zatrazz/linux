@@ -23,6 +23,14 @@
 	}									\
 } while (0)
 
+#define MEMSET_ZERO(type, dst, len) do {					\
+	while (len >= sizeof(type)) {						\
+		__put_unaligned_t(type, 0, dst);				\
+		dst += sizeof(type);						\
+		len -= sizeof(type);						\
+	}									\
+} while (0)
+
 static void memcpy_and_zero_src(void *dst, void *src, size_t len)
 {
 	if (IS_ENABLED(CONFIG_HAVE_EFFICIENT_UNALIGNED_ACCESS)) {
@@ -33,6 +41,27 @@ static void memcpy_and_zero_src(void *dst, void *src, size_t len)
 	}
 	MEMCPY_AND_ZERO_SRC(u8, dst, src, len);
 }
+
+static void memset_zero (void *dst, size_t len)
+{
+	if (IS_ENABLED(CONFIG_HAVE_EFFICIENT_UNALIGNED_ACCESS)) {
+		if (IS_ENABLED(CONFIG_64BIT))
+			MEMSET_ZERO(u64, dst, len);
+		MEMSET_ZERO(u32, dst, len);
+		MEMSET_ZERO(u16, dst, len);
+	}
+	MEMSET_ZERO(u8, dst, len);
+}
+
+#define SIZE_OF_OPAQUE_STATE_OFFSET offsetof (struct vgetrandom_opaque_params, size_of_opaque_state)
+#define MMAP_PROT_OFFSET            offsetof (struct vgetrandom_opaque_params, mmap_prot)
+#define MMAP_FLAGS_OFFSET           offsetof (struct vgetrandom_opaque_params, mmap_flags)
+#define RESERVED_OFFSET             offsetof (struct vgetrandom_opaque_params, reserved)
+#define RESERVED_SIZE               sizeof_field (struct vgetrandom_opaque_params, reserved)
+
+#define __TYPEOF_OPAQUE_PARAMS(member) typeof (((struct vgetrandom_opaque_params *)0)->member)
+#define PUT_OPAQUE_STATE_FIELD(member, value, ptr) \
+	__put_unaligned_t (__TYPEOF_OPAQUE_PARAMS (member), value, ptr);
 
 /**
  * __cvdso_getrandom_data - Generic vDSO implementation of getrandom() syscall.
@@ -73,11 +102,13 @@ __cvdso_getrandom_data(const struct vdso_rng_data *rng_info, void *buffer, size_
 	u32 counter[2] = { 0 };
 
 	if (unlikely(opaque_len == ~0UL && !buffer && !len && !flags)) {
-		*(struct vgetrandom_opaque_params *)opaque_state = (struct vgetrandom_opaque_params) {
-			.size_of_opaque_state = sizeof(*state),
-			.mmap_prot = PROT_READ | PROT_WRITE,
-			.mmap_flags = MAP_DROPPABLE | MAP_ANONYMOUS
-		};
+		PUT_OPAQUE_STATE_FIELD (size_of_opaque_state, sizeof(*state),
+					opaque_state + SIZE_OF_OPAQUE_STATE_OFFSET);
+		PUT_OPAQUE_STATE_FIELD (mmap_prot, PROT_READ | PROT_WRITE,
+					opaque_state + MMAP_PROT_OFFSET);
+		PUT_OPAQUE_STATE_FIELD (mmap_flags, MAP_DROPPABLE | MAP_ANONYMOUS,
+					opaque_state + MMAP_FLAGS_OFFSET);
+		memset_zero (opaque_state + RESERVED_OFFSET, RESERVED_SIZE);
 		return 0;
 	}
 
