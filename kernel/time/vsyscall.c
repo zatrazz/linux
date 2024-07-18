@@ -12,6 +12,7 @@
 #include <vdso/datapage.h>
 #include <vdso/helpers.h>
 #include <vdso/vsyscall.h>
+#include <vdso/vvardef.h>
 
 #include "timekeeping_internal.h"
 
